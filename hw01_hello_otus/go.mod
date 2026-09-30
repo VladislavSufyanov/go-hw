@@ -2,4 +2,4 @@ module github.com/VladislavSufyanov/go-hw/hw01_hello_otus
 
 go 1.23.0
 
-require golang.org/x/example v0.0.0-20220412213650-2e68773dfca0
+require golang.org/x/example/hello v0.0.0-20250915201037-7f05d217867b
