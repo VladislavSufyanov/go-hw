@@ -142,9 +142,96 @@ func TestAllStageStop(t *testing.T) {
 		for s := range ExecutePipeline(in, done, stages...) {
 			result = append(result, s.(string))
 		}
+
 		wg.Wait()
 
 		require.Len(t, result, 0)
+	})
+}
 
+func TestStagesCloseChanels(t *testing.T) {
+	g := func() Stage {
+		return func(in In) Out {
+			out := make(Bi)
+			go func() {
+				<-in
+				time.Sleep(sleepPerStage)
+				close(out)
+			}()
+			return out
+		}
+	}
+
+	stages := []Stage{
+		g(),
+		g(),
+		g(),
+	}
+
+	t.Run("stages close chanels", func(t *testing.T) {
+		in := make(Bi)
+		done := make(Bi)
+		data := []int{1, 2, 3, 4, 5}
+
+		go func() {
+			for _, v := range data {
+				in <- v
+			}
+			close(in)
+		}()
+
+		result := make([]int, 0, 5)
+		for s := range ExecutePipeline(in, done, stages...) {
+			result = append(result, s.(int))
+		}
+
+		require.Len(t, result, 0)
+	})
+}
+
+func TestDoneDuringWriteToStage(t *testing.T) {
+	g := func() Stage {
+		return func(in In) Out {
+			out := make(Bi)
+			go func() {
+				defer close(out)
+				time.Sleep(sleepPerStage * 3)
+				for v := range in {
+					time.Sleep(sleepPerStage)
+					out <- v
+				}
+			}()
+			return out
+		}
+	}
+
+	stages := []Stage{
+		g(),
+	}
+
+	t.Run("stage not read", func(t *testing.T) {
+		in := make(Bi)
+		done := make(Bi)
+		data := []int{1, 2, 3, 4, 5}
+
+		go func() {
+			for _, v := range data {
+				in <- v
+			}
+			close(in)
+		}()
+
+		abortDur := sleepPerStage * 2
+		go func() {
+			<-time.After(abortDur)
+			close(done)
+		}()
+
+		result := make([]int, 0, 5)
+		for s := range ExecutePipeline(in, done, stages...) {
+			result = append(result, s.(int))
+		}
+
+		require.Len(t, result, 0)
 	})
 }
